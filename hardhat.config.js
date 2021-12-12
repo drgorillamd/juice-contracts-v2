@@ -8,6 +8,7 @@ require('@nomiclabs/hardhat-ethers');
 require('hardhat-gas-reporter');
 require('hardhat-deploy');
 require('solidity-coverage');
+require('@primitivefi/hardhat-dodoc');
 
 dotenv.config();
 
