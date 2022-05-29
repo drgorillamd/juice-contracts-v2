@@ -4,13 +4,13 @@ import { deployMockContract } from '@ethereum-waffle/mock-contract';
 import { makeSplits, packFundingCycleMetadata } from '../helpers/utils';
 import errors from '../helpers/errors.json';
 
-import JbController from '../../artifacts/contracts/JBController/1.sol/JBController.json';
+import JbController from '../../artifacts/contracts/JBController.sol/JBController.json';
 import jbDirectory from '../../artifacts/contracts/JBDirectory.sol/JBDirectory.json';
 import jbFundingCycleStore from '../../artifacts/contracts/JBFundingCycleStore.sol/JBFundingCycleStore.json';
 import jbOperatoreStore from '../../artifacts/contracts/JBOperatorStore.sol/JBOperatorStore.json';
 import jbProjects from '../../artifacts/contracts/JBProjects.sol/JBProjects.json';
 import jbSplitsStore from '../../artifacts/contracts/JBSplitsStore.sol/JBSplitsStore.json';
-import jbTerminal from '../../artifacts/contracts/JBETHPaymentTerminal/1.sol/JBETHPaymentTerminal.json';
+import jbTerminal from '../../artifacts/contracts/JBETHPaymentTerminal.sol/JBETHPaymentTerminal.json';
 import jbTokenStore from '../../artifacts/contracts/JBTokenStore.sol/JBTokenStore.json';
 
 describe('JBController::reconfigureFundingCycleOf(...)', function () {
@@ -57,7 +57,7 @@ describe('JBController::reconfigureFundingCycleOf(...)', function () {
     ]);
 
     let jbControllerFactory = await ethers.getContractFactory(
-      'contracts/JBController/1.sol:JBController',
+      'contracts/JBController.sol:JBController',
     );
     let jbController = await jbControllerFactory.deploy(
       mockJbOperatorStore.address,
@@ -89,8 +89,10 @@ describe('JBController::reconfigureFundingCycleOf(...)', function () {
         ),
       );
 
+    const groupedSplits = [{ group: 1, splits }];
+
     await mockJbSplitsStore.mock.set
-      .withArgs(PROJECT_ID, /*configuration=*/ timestamp, /*group=*/ 1, splits)
+      .withArgs(PROJECT_ID, /*configuration=*/ timestamp, groupedSplits)
       .returns();
 
     return {
@@ -106,6 +108,7 @@ describe('JBController::reconfigureFundingCycleOf(...)', function () {
       mockJbFundingCycleStore,
       mockJbTerminal1,
       mockJbTerminal2,
+      mockJbSplitsStore,
       timestamp,
       fundingCycleData,
       fundingCycleMetadata,
@@ -441,10 +444,17 @@ describe('JBController::reconfigureFundingCycleOf(...)', function () {
       fundingCycleMetadata,
       mockJbTerminal1,
       mockJbTerminal2,
+      mockJbSplitsStore
     } = await setup();
 
     const terminals = [mockJbTerminal1.address, mockJbTerminal2.address];
     const fundAccessConstraints = makeFundingAccessConstraints({ terminals });
+
+    const groupedSplits = [];
+
+    await mockJbSplitsStore.mock.set
+      .withArgs(PROJECT_ID, /*configuration=*/ timestamp, groupedSplits)
+      .returns();
 
     expect(
       await jbController
@@ -454,7 +464,7 @@ describe('JBController::reconfigureFundingCycleOf(...)', function () {
           fundingCycleData,
           fundingCycleMetadata.unpacked,
           PROJECT_START,
-          [],
+          groupedSplits,
           fundAccessConstraints,
           MEMO,
         ),
@@ -503,6 +513,7 @@ describe('JBController::reconfigureFundingCycleOf(...)', function () {
       fundingCycleMetadata,
       mockJbTerminal1,
       mockJbTerminal2,
+      mockJbSplitsStore
     } = await setup();
 
     const groupedSplits = [{ group: 1, splits: [] }];
@@ -513,6 +524,10 @@ describe('JBController::reconfigureFundingCycleOf(...)', function () {
       overflowAllowance: 0,
       currency: 0,
     });
+
+    await mockJbSplitsStore.mock.set
+      .withArgs(PROJECT_ID, /*configuration=*/ timestamp, groupedSplits)
+      .returns();
 
     expect(
       await jbController

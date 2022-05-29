@@ -4,7 +4,7 @@ import { deployMockContract } from '@ethereum-waffle/mock-contract';
 import { packFundingCycleMetadata } from '../helpers/utils';
 import errors from '../helpers/errors.json';
 
-import JbController from '../../artifacts/contracts/JBController/1.sol/JBController.json';
+import JbController from '../../artifacts/contracts/JBController.sol/JBController.json';
 import jbDirectory from '../../artifacts/contracts/JBDirectory.sol/JBDirectory.json';
 import jbFundingCycleStore from '../../artifacts/contracts/JBFundingCycleStore.sol/JBFundingCycleStore.json';
 import jbOperatoreStore from '../../artifacts/contracts/JBOperatorStore.sol/JBOperatorStore.json';
@@ -50,7 +50,7 @@ describe('JBController::migrate(...)', function () {
     ]);
 
     let jbControllerFactory = await ethers.getContractFactory(
-      'contracts/JBController/1.sol:JBController',
+      'contracts/JBController.sol:JBController',
     );
     let jbController = await jbControllerFactory.deploy(
       mockJbOperatorStore.address,

@@ -9,14 +9,14 @@ import ierc20 from '../../artifacts/@openzeppelin/contracts/token/ERC20/ERC20.so
 import jbAllocator from '../../artifacts/contracts/interfaces/IJBSplitAllocator.sol/IJBSplitAllocator.json';
 import jbDirectory from '../../artifacts/contracts/JBDirectory.sol/JBDirectory.json';
 import jbSplitsStore from '../../artifacts/contracts/JBSplitsStore.sol/JBSplitsStore.json';
-import jbTerminal from '../../artifacts/contracts/abstract/JBPayoutRedemptionPaymentTerminal/1.sol/JBPayoutRedemptionPaymentTerminal.json';
+import jbTerminal from '../../artifacts/contracts/abstract/JBPayoutRedemptionPaymentTerminal.sol/JBPayoutRedemptionPaymentTerminal.json';
 
 describe('JBETHERC20SplitsPayer::receive()', function () {
   const DEFAULT_PROJECT_ID = 2;
   const DEFAULT_SPLITS_PROJECT_ID = 3;
   const DEFAULT_SPLITS_DOMAIN = 1;
   const DEFAULT_SPLITS_GROUP = 1;
-  const DEFAULT_BENEFICIARY = ethers.Wallet.createRandom().address;
+  let DEFAULT_BENEFICIARY;
   const DEFAULT_PREFER_CLAIMED_TOKENS = false;
   const DEFAULT_MEMO = 'hello world';
   const DEFAULT_METADATA = '0x69';
@@ -45,15 +45,17 @@ describe('JBETHERC20SplitsPayer::receive()', function () {
   });
 
   async function setup() {
-    let [deployer, owner, caller, beneficiaryOne, beneficiaryTwo, beneficiaryThree, ...addrs] =
+    let [deployer, owner, caller, beneficiaryOne, beneficiaryTwo, beneficiaryThree, defaultBeneficiarySigner, ...addrs] =
       await ethers.getSigners();
+
+    DEFAULT_BENEFICIARY = defaultBeneficiarySigner.address;
 
     let mockJbDirectory = await deployMockContract(deployer, jbDirectory.abi);
     let mockJbSplitsStore = await deployMockContract(deployer, jbSplitsStore.abi);
     let mockJbTerminal = await deployMockContract(deployer, jbTerminal.abi);
     let mockToken = await deployMockContract(deployer, ierc20.abi);
 
-    let jbSplitsPayerFactory = await ethers.getContractFactory('JBETHERC20SplitsPayer');
+    let jbSplitsPayerFactory = await ethers.getContractFactory('contracts/JBETHERC20SplitsPayer.sol:JBETHERC20SplitsPayer');
 
     await mockJbSplitsStore.mock.directory.returns(mockJbDirectory.address);
 
@@ -75,6 +77,7 @@ describe('JBETHERC20SplitsPayer::receive()', function () {
       beneficiaryOne,
       beneficiaryTwo,
       beneficiaryThree,
+      defaultBeneficiarySigner,
       deployer,
       caller,
       owner,
@@ -199,7 +202,7 @@ describe('JBETHERC20SplitsPayer::receive()', function () {
     await expect(tx).to.changeEtherBalance(mockJbTerminal, AMOUNT);
   });
 
-  it(`Should send fund towards project terminal if project ID is set in split, using pay with the caller as beneficiary is none is set in splits`, async function () {
+  it(`Should send fund towards project terminal if project ID is set in split, using pay with the default beneficiary if none is set in splits`, async function () {
     const { caller, jbSplitsPayer, mockJbSplitsStore, mockJbDirectory, mockJbTerminal } =
       await setup();
 
@@ -218,7 +221,7 @@ describe('JBETHERC20SplitsPayer::receive()', function () {
             split.projectId,
             AMOUNT.mul(split.percent).div(maxSplitsPercent),
             ethToken,
-            caller.address,
+            DEFAULT_BENEFICIARY,
             0 /*hardcoded*/,
             split.preferClaimed,
             DEFAULT_MEMO,
@@ -260,8 +263,8 @@ describe('JBETHERC20SplitsPayer::receive()', function () {
     );
   });
 
-  it(`Should send fund directly to the caller, if no allocator, project ID or beneficiary is set`, async function () {
-    const { caller, jbSplitsPayer, mockJbSplitsStore } = await setup();
+  it(`Should send fund directly to the default beneficiary, if no allocator, project ID or beneficiary is set`, async function () {
+    const { caller, jbSplitsPayer, mockJbSplitsStore, defaultBeneficiarySigner } = await setup();
 
     let splits = makeSplits();
 
@@ -270,7 +273,34 @@ describe('JBETHERC20SplitsPayer::receive()', function () {
       .returns(splits);
 
     let tx = await caller.sendTransaction({ to: jbSplitsPayer.address, value: AMOUNT });
-    await expect(tx).to.changeEtherBalance(caller, 0); // Send then receive the amount (gas is not taken into account)
+    await expect(tx).to.changeEtherBalance(defaultBeneficiarySigner, AMOUNT);
+  });
+
+  it(`Should send fund directly to the caller, if no allocator, project ID, beneficiary or default beneficiary is set`, async function () {
+    const { caller, jbSplitsPayerFactory, mockJbSplitsStore, owner } = await setup();
+
+    let jbSplitsPayerWithoutDefaultBeneficiary = await jbSplitsPayerFactory.deploy(
+      DEFAULT_SPLITS_PROJECT_ID,
+      DEFAULT_SPLITS_DOMAIN,
+      DEFAULT_SPLITS_GROUP,
+      mockJbSplitsStore.address,
+      DEFAULT_PROJECT_ID,
+      ethers.constants.AddressZero,
+      DEFAULT_PREFER_CLAIMED_TOKENS,
+      DEFAULT_MEMO,
+      DEFAULT_METADATA,
+      PREFER_ADD_TO_BALANCE,
+      owner.address,
+    );
+
+    let splits = makeSplits();
+
+    await mockJbSplitsStore.mock.splitsOf
+      .withArgs(DEFAULT_SPLITS_PROJECT_ID, DEFAULT_SPLITS_DOMAIN, DEFAULT_SPLITS_GROUP)
+      .returns(splits);
+
+    let tx = await caller.sendTransaction({ to: jbSplitsPayerWithoutDefaultBeneficiary.address, value: AMOUNT });
+    await expect(tx).to.changeEtherBalance(caller, 0); // -AMOUNT then +AMOUNT, gas is not taken into account
   });
 
   it(`Should send eth leftover to project id if set, using pay`, async function () {

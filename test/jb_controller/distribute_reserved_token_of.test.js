@@ -59,7 +59,7 @@ describe('JBController::distributeReservedTokensOf(...)', function () {
     ]);
 
     let jbControllerFactory = await ethers.getContractFactory(
-      'contracts/JBController/1.sol:JBController',
+      'contracts/JBController.sol:JBController',
     );
     let jbController = await jbControllerFactory.deploy(
       mockJbOperatorStore.address,
